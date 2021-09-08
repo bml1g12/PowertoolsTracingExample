@@ -1,0 +1,76 @@
+service: deletemepowertoolsdemo
+
+frameworkVersion: '2'
+configValidationMode: error
+
+package:
+  individually: true
+  exclude:
+    - node_modules/**
+    - venv/**
+    - draft_scripts/**
+    - output/**
+    - tests/**
+    - docs/**
+    - consumer.log
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-python-requirements
+
+provider:
+  name: aws
+  runtime: python3.7
+  lambdaHashingVersion: 20201221
+  profile: ${opt:profile, env:PROFILE}
+  stage: ${opt:stage, env:NODE_ENV}
+  tracing:
+    lambda: true
+  timeout: 60 # seconds, which is 5 seconds
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - lambda:InvokeFunction # Added this like mentioned above
+      Resource:
+        - arn:aws:lambda:us-east-1:*:* # Had to add this too  
+    - Effect: "Allow"
+      Action:
+       - sqs:SendMessage
+      Resource:
+        Fn::GetAtt: [ MyQueue, Arn ]
+    - Effect: Allow
+      Action:
+       - xray:PutTraceSegment
+       - xray:PutTraceSegments
+       - xray:PutTelemetryRecords
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - sqs:SendMessage
+        - sqs:SetQueueAttributes # Lambda needs the following permissions to manage messages in your Amazon SQS queue.
+        - sqs:ReceiveMessage # Lambda needs the following permissions to manage messages in your Amazon SQS queue.
+        - sqs:DeleteMessage # Lambda needs the following permissions to manage messages in your Amazon SQS queue.
+        - sqs:ListQueues
+        - sqs:ListQueueTags
+        - sqs:GetQueueUrl
+      Resource:
+         - Fn::GetAtt: [ MyQueue, Arn ]
+functions:
+  helloworld:
+    handler: handler.hello
+
+resources:
+  Resources:
+    MyQueue:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        QueueName: ${self:custom.queue_name}
+
+custom:
+  queue_name: "${self:provider.stage}-${self:service}-sqs"
+  dotenv:
+    basePath: ./env/
+    logging: true
+  pythonRequirements:
+    dockerizePip: true
+    useDownloadCache: false
